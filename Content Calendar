@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Content & Calendar</title>
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+    #app { padding: 2rem; max-width: 900px; margin: auto; }
+    h1, h2 { text-align: center; }
+    #controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; align-items: end; margin-bottom: 1rem; }
+    select, textarea, button, input[type="date"] { width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+    textarea { resize: vertical; }
+    button { background: #007bff; color: #fff; cursor: pointer; border: none; }
+    button:disabled { background: #999; cursor: default; }
+    button:hover:enabled { opacity: 0.9; }
+    #exportBtn { background: #ffc107; color: #000; margin-top: 1rem; }
+    #autoFillBtn { background: #17a2b8; color: #fff; margin-top: 1rem; }
+    #clearBtn { background: #dc3545; color: #fff; margin-top: 1rem; }
+    #loader { display: none; text-align: center; margin-top: 0.5rem; }
+    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; margin: auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #posts { margin-bottom: 2rem; }
+    .post { background: #fff; border-left: 4px solid #007bff; padding: 1rem; margin-top: 1rem; border-radius: 4px; }
+    .copyBtn, .scheduleBtn { margin-right: 0.5rem; padding: 0.3rem 0.6rem; border: none; border-radius: 4px; cursor: pointer; }
+    .copyBtn { background: #28a745; color: #fff; }
+    .scheduleBtn { background: #17a2b8; color: #fff; }
+    .media-prompt { margin-top: 0.5rem; font-style: italic; color: #555; }
+    #calendar { background: #fff; padding: 1rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>AI Content &amp; Calendar</h1>
+    <div id="controls">
+      <div>
+        <label for="serviceType">Service:</label>
+        <select id="serviceType">
+          <option>Landscape Lighting</option>
+          <option>Christmas Light Installation</option>
+        </select>
+      </div>
+      <div>
+        <label for="postType">Post Type:</label>
+        <select id="postType">
+          <option>Feature Spotlight</option>
+          <option>Educational Tip</option>
+          <option>Seasonal Promotion</option>
+          <option>Engagement Question</option>
+        </select>
+      </div>
+      <div style="grid-column:1/-1;">
+        <label for="suggestions">Custom Suggestions:</label>
+        <textarea id="suggestions" rows="2" placeholder="Extra ideas..."></textarea>
+      </div>
+      <button id="generateBtn">Generate Post</button>
+      <div id="loader">
+        <div class="spinner"></div>
+        <div>Generating post...</div>
+      </div>
+    </div>
+    <div id="posts"></div>
+    <h2>Content Calendar</h2>
+    <div id="calendar"></div>
+    <button id="exportBtn">Export Calendar CSV</button>
+    <button id="autoFillBtn">Auto-Fill Month</button>
+    <button id="clearBtn">Clear Calendar</button>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const apiKey = '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';
+      const services = ['Landscape Lighting', 'Christmas Light Installation'];
+      const postTypes = ['Feature Spotlight', 'Educational Tip', 'Seasonal Promotion', 'Engagement Question'];
+      let savedEvents = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
+
+      const seasonalConfig = [
+        {start:'02-01',end:'03-31',primary:'Landscape Lighting',secondary:'Christmas Light Installation',ratio:[70,30]},
+        {start:'04-01',end:'06-30',primary:'Landscape Lighting',secondary:'Christmas Light Installation',ratio:[90,10]},
+        {start:'07-01',end:'07-31',primary:'Christmas Light Installation',secondary:'Landscape Lighting',ratio:[60,40]},
+        {start:'08-01',end:'09-30',primary:'Landscape Lighting',secondary:'Christmas Light Installation',ratio:[80,20]},
+        {start:'10-01',end:'11-15',primary:'Christmas Light Installation',secondary:'Landscape Lighting',ratio:[90,10]},
+        {start:'11-16',end:'12-20',primary:'Christmas Light Installation',secondary:'Landscape Lighting',ratio:[95,5]},
+        {start:'01-01',end:'02-28',primary:'Christmas Light Installation',secondary:'Landscape Lighting',ratio:[80,20]}
+      ];
+      function getSeasonalService(dateStr) {
+        const date = new Date(dateStr), year = date.getFullYear();
+        for (const cfg of seasonalConfig) {
+          const start = new Date(`${year}-${cfg.start}`), end = new Date(`${year}-${cfg.end}`);
+          if (date >= start && date <= end) return Math.random() * 100 < cfg.ratio[0] ? cfg.primary : cfg.secondary;
+        }
+        return services[Math.floor(Math.random() * services.length)];
+      }
+
+      const calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+        initialView: 'dayGridMonth', height: 600,
+        events: savedEvents.map(ev => ({ title: ev.content.substring(0,30) + '...', start: ev.date, extendedProps: { mediaPrompt: ev.mediaPrompt } })),
+        eventClick: info => alert('Media Prompt: ' + info.event.extendedProps.mediaPrompt)
+      });
+      calendar.render();
+
+      function saveEvent(ev) { savedEvents.push(ev); localStorage.setItem('calendarEvents', JSON.stringify(savedEvents)); }
+
+      async function generateContent(service, type, suggestions) {
+        const runId = Math.random().toString(36).slice(2,8);
+        const systemPrompt =
+`Voice Summary: Friendly Expert, Enthusiastic Problem-Solver, Visually Engaging
+Tone: Warm, casual with light humor
+Structure: 🎯 Varied HOOK → 3–5 random emoji bullets → unique CTA → 2–3 hashtags
+After hashtags, include {IMAGE_PROMPT} on a new line followed by a concise, realistic image description.
+Business: Xtreme Lighting offers ${service.toLowerCase()} services.
+Post Type: ${type}.
+Run ID: ${runId}`;
+        let userPrompt = 'Generate one brand-aligned social post with varied openings and bullet order.';
+        if (suggestions) userPrompt += ` Context: ${suggestions}`;
+
+        const res = await fetch('https://api.openai.com/v1/chat/completions',{ method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model:'gpt-4o-mini', messages:[{role:'system',content:systemPrompt},{role:'user',content:userPrompt}], temperature:1.0, max_tokens:600 }) });
+        if (!res.ok) { const err = await res.json(); console.error('OpenAI error', err); throw new Error(err.error?.message || `HTTP ${res.status}`); }
+        const data = await res.json(); const raw = data.choices[0].message.content.trim();
+        let content = raw, mediaPrompt = '';
+        if (raw.includes('{IMAGE_PROMPT}')) { const parts = raw.split('{IMAGE_PROMPT}'); content = parts[0].trim(); mediaPrompt = parts[1].trim(); }
+        return { content, mediaPrompt };
+      }
+
+      function addPostToUI(content, mediaPrompt) {
+        const postDiv = document.createElement('div'); postDiv.className='post'; postDiv.innerHTML = content.replace(/\n/g,'<br>');
+        const mpDiv = document.createElement('div'); mpDiv.className='media-prompt'; mpDiv.textContent = `Media Prompt: ${mediaPrompt}`; postDiv.appendChild(mpDiv);
+        const copyBtn = document.createElement('button'); copyBtn.className='copyBtn'; copyBtn.textContent='Copy'; copyBtn.onclick=()=>navigator.clipboard.writeText(content).then(()=>alert('Copied!'));
+        const dateInput = document.createElement('input'); dateInput.type='date';
+        const schedBtn = document.createElement('button'); schedBtn.className='scheduleBtn'; schedBtn.textContent='Schedule'; schedBtn.onclick=()=>{ const dt=dateInput.value; if(!dt) return alert('Select date'); calendar.addEvent({ title: content.substring(0,30)+'...', start: dt, extendedProps:{mediaPrompt} }); saveEvent({ service:document.getElementById('serviceType').value, type:document.getElementById('postType').value, content, mediaPrompt, date:dt }); };
+        postDiv.append(dateInput, copyBtn, schedBtn);
+        document.getElementById('posts').insertBefore(postDiv, document.getElementById('posts').firstChild);
+      }
+
+      document.getElementById('generateBtn').addEventListener('click', async() => {
+        const btn=document.getElementById('generateBtn'), loader=document.getElementById('loader'); btn.disabled=true; loader.style.display='block';
+        try { const service=document.getElementById('serviceType').value; const type=document.getElementById('postType').value; const suggestions=document.getElementById('suggestions').value.trim(); const {content,mediaPrompt} = await generateContent(service,type,suggestions); addPostToUI(content,mediaPrompt); }
+        catch(err){ alert(`Error generating post: ${err.message}`); console.error(err); }
+        finally{ btn.disabled=false; loader.style.display='none'; }
+      });
+
+      document.getElementById('autoFillBtn').addEventListener('click', async() => {
+        const autoBtn=document.getElementById('autoFillBtn'), genBtn=document.getElementById('generateBtn'), loader=document.getElementById('loader'); autoBtn.disabled=true; genBtn.disabled=true; loader.style.display='block';
+        const today=calendar.getDate(), year=today.getFullYear(), month=today.getMonth(); const days=new Date(year,month+1,0).getDate();
+        for(let d=1; d<=days; d++){
+          const dt=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+          for(const service of services){ const type=postTypes[Math.floor(Math.random()*postTypes.length)]; try{ const {content,mediaPrompt}=await generateContent(service,type,''); calendar.addEvent({title:content.substring(0,30)+'...',start:dt,extendedProps:{mediaPrompt}}); saveEvent({service,type,content,mediaPrompt,date:dt});}catch(e){console.error(e);} }
+        }
+        autoBtn.disabled=false; genBtn.disabled=false; loader.style.display='none'; alert(`Auto-filled ${days*services.length} posts.`);
+      });
+
+      document.getElementById('exportBtn').addEventListener('click',()=>{ if(!savedEvents.length)return alert('No posts to export.'); let csv='Service,PostType,Content,MediaPrompt,Date\n'; savedEvents.forEach(({service,type,content,mediaPrompt,date})=>{ csv+=`"${service}","${type}","${content.replace(/"/g,'""')}","${mediaPrompt.replace(/"/g,'""')}",${date}\n`; }); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='content_calendar.csv';link.click();});
+
+      document.getElementById('clearBtn').addEventListener('click',()=>{ if(confirm('Clear all scheduled posts?')){ savedEvents=[]; localStorage.removeItem('calendarEvents'); calendar.removeAllEvents(); }});
+    });
+  </script>
+</body>
+</html>
