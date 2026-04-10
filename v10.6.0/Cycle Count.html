@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cycle Count App v10.6.0</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #1d4ed8;
+      --primary-hover: #1e40af;
+      --accent: #059669;
+      --danger: #dc2626;
+      --border: #d1d5db;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1rem;
+      display: grid;
+      gap: 1rem;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 0.75rem 0;
+    }
+
+    .controls {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      align-items: end;
+    }
+
+    .field {
+      display: grid;
+      gap: 0.3rem;
+    }
+
+    label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    input, button, select {
+      width: 100%;
+      padding: 0.65rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 0.95rem;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+    }
+
+    button:hover { background: var(--primary-hover); }
+
+    .btn-secondary {
+      background: #475569;
+    }
+
+    .btn-success {
+      background: var(--accent);
+    }
+
+    .btn-danger {
+      background: var(--danger);
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+      margin-top: 0.6rem;
+    }
+
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.7rem;
+      background: #f9fafb;
+    }
+
+    .pill strong {
+      display: block;
+      font-size: 1.2rem;
+      margin-top: 0.25rem;
+    }
+
+    .scan-bar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.75rem;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .workflow {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+
+    .step {
+      padding: 0.4rem 0.65rem;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      font-size: 0.82rem;
+      background: #f8fafc;
+    }
+
+    .step.active {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: #eff6ff;
+      font-weight: 700;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-top: 0.75rem;
+      max-height: 380px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    th, td {
+      padding: 0.55rem;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+      vertical-align: top;
+      font-size: 0.88rem;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f8fafc;
+      z-index: 2;
+    }
+
+    .log {
+      margin-top: 0.5rem;
+      max-height: 190px;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem;
+      background: #f8fafc;
+      font-size: 0.85rem;
+    }
+
+    .log-entry {
+      padding: 0.3rem 0;
+      border-bottom: 1px dashed #e5e7eb;
+    }
+
+    .log-entry:last-child { border-bottom: none; }
+
+    .highlight {
+      background: #fffbeb;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Cycle Count App v10.6.0</h1>
+      <p class="muted">Workflow: Upload count sheet → Scan BIN tag → Scan LOT tag → Enter quantity → Repeat per shelf → Complete and export PDF + CSV.</p>
+      <div class="controls">
+        <div class="field">
+          <label for="counterName">Counter Name</label>
+          <input id="counterName" type="text" placeholder="e.g., J. Rivera" />
+        </div>
+        <div class="field">
+          <label for="sheetFile">Inventory Count Sheet (XLSX / CSV)</label>
+          <input id="sheetFile" type="file" accept=".xlsx,.xls,.csv" />
+        </div>
+        <div class="field">
+          <button id="loadSheetBtn">Load Sheet</button>
+        </div>
+      </div>
+
+      <div class="status-grid">
+        <div class="pill">Total Sheet Lines<strong id="sheetLineCount">0</strong></div>
+        <div class="pill">Counted Lines<strong id="countedLineCount">0</strong></div>
+        <div class="pill">Current Shelf / BIN<strong id="currentBin">-</strong></div>
+        <div class="pill">Open Lines in Shelf<strong id="openShelfLines">0</strong></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Scan Workflow</h2>
+      <div class="scan-bar">
+        <input id="scanInput" type="text" placeholder="Scan BIN or LOT tag here, then press Enter" autocomplete="off" />
+        <button id="submitScanBtn">Submit Scan</button>
+      </div>
+      <div class="controls" style="margin-top:0.75rem;">
+        <div class="field">
+          <label for="quantityInput">Quantity (after LOT scan)</label>
+          <input id="quantityInput" type="number" min="0" step="1" placeholder="Enter counted qty" disabled />
+        </div>
+        <div class="field">
+          <button id="saveQtyBtn" class="btn-success" disabled>Save Quantity</button>
+        </div>
+        <div class="field">
+          <button id="nextShelfBtn" class="btn-secondary">Next Shelf (Scan next BIN)</button>
+        </div>
+      </div>
+
+      <div class="workflow">
+        <span class="step" id="stepBin">1. Scan BIN</span>
+        <span class="step" id="stepLot">2. Scan LOT</span>
+        <span class="step" id="stepQty">3. Enter QTY</span>
+      </div>
+
+      <div id="activeTarget" class="muted" style="margin-top:0.75rem;">No active lot selected.</div>
+      <div id="scanLog" class="log"></div>
+    </div>
+
+    <div class="card">
+      <h2>Count Detail</h2>
+      <div class="controls">
+        <div class="field"><button id="completeBtn" class="btn-success">Complete Count + Generate PDF/CSV</button></div>
+        <div class="field"><button id="resetBtn" class="btn-danger">Reset Session</button></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>BIN</th>
+              <th>LOT</th>
+              <th>Part #</th>
+              <th>Description</th>
+              <th>Expected Qty</th>
+              <th>Counted Qty</th>
+              <th>Variance</th>
+              <th>Counter</th>
+              <th>Counted At</th>
+            </tr>
+          </thead>
+          <tbody id="countTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <script>
+    const state = {
+      rows: [],
+      currentBin: null,
+      activeRowIndex: null,
+      mode: 'scan-bin'
+    };
+
+    const el = {
+      sheetFile: document.getElementById('sheetFile'),
+      loadSheetBtn: document.getElementById('loadSheetBtn'),
+      counterName: document.getElementById('counterName'),
+      scanInput: document.getElementById('scanInput'),
+      submitScanBtn: document.getElementById('submitScanBtn'),
+      quantityInput: document.getElementById('quantityInput'),
+      saveQtyBtn: document.getElementById('saveQtyBtn'),
+      nextShelfBtn: document.getElementById('nextShelfBtn'),
+      completeBtn: document.getElementById('completeBtn'),
+      resetBtn: document.getElementById('resetBtn'),
+      scanLog: document.getElementById('scanLog'),
+      activeTarget: document.getElementById('activeTarget'),
+      countTableBody: document.getElementById('countTableBody'),
+      sheetLineCount: document.getElementById('sheetLineCount'),
+      countedLineCount: document.getElementById('countedLineCount'),
+      currentBin: document.getElementById('currentBin'),
+      openShelfLines: document.getElementById('openShelfLines'),
+      stepBin: document.getElementById('stepBin'),
+      stepLot: document.getElementById('stepLot'),
+      stepQty: document.getElementById('stepQty')
+    };
+
+    function normalize(value) {
+      return String(value ?? '').trim();
+    }
+
+    function nowStamp() {
+      return new Date().toLocaleString();
+    }
+
+    function log(message) {
+      const item = document.createElement('div');
+      item.className = 'log-entry';
+      item.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      el.scanLog.prepend(item);
+    }
+
+    function updateModeUI() {
+      el.stepBin.classList.toggle('active', state.mode === 'scan-bin');
+      el.stepLot.classList.toggle('active', state.mode === 'scan-lot');
+      el.stepQty.classList.toggle('active', state.mode === 'enter-qty');
+
+      const qtyEnabled = state.mode === 'enter-qty';
+      el.quantityInput.disabled = !qtyEnabled;
+      el.saveQtyBtn.disabled = !qtyEnabled;
+
+      el.currentBin.textContent = state.currentBin || '-';
+      const open = state.rows.filter(r => r.bin === state.currentBin && r.countedQty === null).length;
+      el.openShelfLines.textContent = state.currentBin ? String(open) : '0';
+    }
+
+    function inferColumn(row, candidates) {
+      const keys = Object.keys(row || {});
+      const found = keys.find(k => candidates.some(c => k.toLowerCase().includes(c)));
+      return found || null;
+    }
+
+    function mapSheetRows(rawRows) {
+      if (!rawRows.length) return [];
+
+      const sample = rawRows[0];
+      const binKey = inferColumn(sample, ['bin', 'shelf', 'location']);
+      const lotKey = inferColumn(sample, ['lot', 'tag']);
+      const partKey = inferColumn(sample, ['part', 'item', 'sku']);
+      const descKey = inferColumn(sample, ['desc', 'name']);
+      const expectedKey = inferColumn(sample, ['expected', 'book', 'system', 'on hand', 'qty']);
+
+      return rawRows
+        .map((r, i) => ({
+          id: i + 1,
+          bin: normalize(r[binKey]),
+          lot: normalize(r[lotKey]),
+          part: normalize(r[partKey]),
+          description: normalize(r[descKey]),
+          expectedQty: Number(r[expectedKey]) || 0,
+          countedQty: null,
+          variance: null,
+          countedBy: '',
+          countedAt: ''
+        }))
+        .filter(r => r.bin || r.lot || r.part);
+    }
+
+    function renderTable() {
+      el.countTableBody.innerHTML = '';
+      for (let i = 0; i < state.rows.length; i += 1) {
+        const row = state.rows[i];
+        const tr = document.createElement('tr');
+        if (i === state.activeRowIndex) tr.classList.add('highlight');
+        tr.innerHTML = `
+          <td>${row.bin}</td>
+          <td>${row.lot}</td>
+          <td>${row.part}</td>
+          <td>${row.description}</td>
+          <td>${row.expectedQty}</td>
+          <td>${row.countedQty ?? ''}</td>
+          <td>${row.variance ?? ''}</td>
+          <td>${row.countedBy}</td>
+          <td>${row.countedAt}</td>
+        `;
+        el.countTableBody.appendChild(tr);
+      }
+
+      el.sheetLineCount.textContent = String(state.rows.length);
+      const counted = state.rows.filter(r => r.countedQty !== null).length;
+      el.countedLineCount.textContent = String(counted);
+    }
+
+    function setActiveLot(index) {
+      state.activeRowIndex = index;
+      const row = state.rows[index];
+      if (!row) {
+        state.mode = state.currentBin ? 'scan-lot' : 'scan-bin';
+        el.activeTarget.textContent = 'No active lot selected.';
+      } else {
+        state.mode = 'enter-qty';
+        el.activeTarget.textContent = `Selected LOT ${row.lot || '(blank)'} for BIN ${row.bin}. Enter quantity.`;
+      }
+      el.quantityInput.value = '';
+      updateModeUI();
+      renderTable();
+    }
+
+    function handleBinScan(code) {
+      const hasRows = state.rows.some(r => r.bin === code);
+      state.currentBin = code;
+      state.activeRowIndex = null;
+      state.mode = 'scan-lot';
+      updateModeUI();
+      renderTable();
+      if (hasRows) {
+        log(`BIN scanned: ${code}. Ready for LOT scans on this shelf.`);
+      } else {
+        log(`BIN scanned: ${code}. No matching lines in sheet; LOT scans will try exact match in this BIN.`);
+      }
+    }
+
+    function handleLotScan(code) {
+      if (!state.currentBin) {
+        log('Scan BIN first.');
+        state.mode = 'scan-bin';
+        updateModeUI();
+        return;
+      }
+
+      const rowIndex = state.rows.findIndex(r => r.bin === state.currentBin && r.lot === code && r.countedQty === null);
+      if (rowIndex === -1) {
+        log(`LOT ${code} not found (or already counted) for BIN ${state.currentBin}.`);
+        return;
+      }
+
+      log(`LOT scanned: ${code}. Awaiting quantity entry.`);
+      setActiveLot(rowIndex);
+      el.quantityInput.focus();
+    }
+
+    function saveQuantity() {
+      if (state.activeRowIndex === null) {
+        log('No active LOT selected.');
+        return;
+      }
+      const qty = Number(el.quantityInput.value);
+      if (!Number.isFinite(qty) || qty < 0) {
+        log('Enter a valid quantity (0 or greater).');
+        return;
+      }
+
+      const row = state.rows[state.activeRowIndex];
+      row.countedQty = qty;
+      row.variance = qty - row.expectedQty;
+      row.countedBy = normalize(el.counterName.value) || 'Unknown';
+      row.countedAt = nowStamp();
+
+      log(`Saved QTY ${qty} for BIN ${row.bin} / LOT ${row.lot}.`);
+
+      const remainingInBin = state.rows.some(r => r.bin === state.currentBin && r.countedQty === null);
+      state.activeRowIndex = null;
+      state.mode = remainingInBin ? 'scan-lot' : 'scan-bin';
+      if (!remainingInBin) {
+        log(`Shelf ${state.currentBin} appears complete. Scan next BIN.`);
+      }
+
+      el.activeTarget.textContent = 'No active lot selected.';
+      el.quantityInput.value = '';
+      updateModeUI();
+      renderTable();
+      el.scanInput.focus();
+    }
+
+    function parseWorkbook(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = event => {
+          try {
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+            resolve(rows);
+          } catch (error) {
+            reject(error);
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    function csvEscape(value) {
+      return `"${String(value ?? '').replace(/"/g, '""')}"`;
+    }
+
+    function downloadFile(filename, content, type) {
+      const blob = new Blob([content], { type });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    function buildCsv() {
+      const headers = ['BIN', 'LOT', 'PartNumber', 'Description', 'ExpectedQty', 'CountedQty', 'Variance', 'CountedBy', 'CountedAt'];
+      const lines = [headers.join(',')];
+      state.rows.forEach(r => {
+        lines.push([
+          csvEscape(r.bin),
+          csvEscape(r.lot),
+          csvEscape(r.part),
+          csvEscape(r.description),
+          csvEscape(r.expectedQty),
+          csvEscape(r.countedQty ?? ''),
+          csvEscape(r.variance ?? ''),
+          csvEscape(r.countedBy),
+          csvEscape(r.countedAt)
+        ].join(','));
+      });
+      return lines.join('\n');
+    }
+
+    function buildPdf() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+      const runDate = new Date().toLocaleString();
+      const counted = state.rows.filter(r => r.countedQty !== null).length;
+      const totalVariance = state.rows.reduce((sum, r) => sum + (r.variance || 0), 0);
+
+      doc.setFontSize(16);
+      doc.text('Cycle Count Report', 40, 44);
+      doc.setFontSize(10);
+      doc.text(`Generated: ${runDate}`, 40, 62);
+      doc.text(`Counter: ${normalize(el.counterName.value) || 'Unknown'}`, 40, 76);
+      doc.text(`Total Lines: ${state.rows.length} | Counted Lines: ${counted} | Total Variance: ${totalVariance}`, 40, 90);
+
+      const rows = state.rows.map(r => [
+        r.bin,
+        r.lot,
+        r.part,
+        r.description,
+        String(r.expectedQty),
+        r.countedQty === null ? '' : String(r.countedQty),
+        r.variance === null ? '' : String(r.variance),
+        r.countedBy,
+        r.countedAt
+      ]);
+
+      doc.autoTable({
+        startY: 108,
+        head: [['BIN', 'LOT', 'Part #', 'Description', 'Expected', 'Counted', 'Var', 'By', 'Time']],
+        body: rows,
+        styles: { fontSize: 7, cellPadding: 3 },
+        headStyles: { fillColor: [30, 64, 175] },
+        columnStyles: {
+          3: { cellWidth: 130 },
+          8: { cellWidth: 95 }
+        }
+      });
+
+      doc.save('cycle_count_report.pdf');
+    }
+
+    async function loadSheet() {
+      const file = el.sheetFile.files[0];
+      if (!file) {
+        log('Choose a sheet file first.');
+        return;
+      }
+
+      try {
+        const rawRows = await parseWorkbook(file);
+        state.rows = mapSheetRows(rawRows);
+        state.currentBin = null;
+        state.activeRowIndex = null;
+        state.mode = 'scan-bin';
+        renderTable();
+        updateModeUI();
+        log(`Loaded ${state.rows.length} rows from ${file.name}.`);
+      } catch (error) {
+        log(`Failed to read sheet: ${error.message}`);
+      }
+    }
+
+    function submitScan() {
+      const code = normalize(el.scanInput.value);
+      if (!code) return;
+
+      if (state.mode === 'scan-bin') {
+        handleBinScan(code);
+      } else if (state.mode === 'scan-lot') {
+        handleLotScan(code);
+      } else {
+        log('Finish quantity entry before next scan.');
+      }
+
+      el.scanInput.value = '';
+      el.scanInput.focus();
+    }
+
+    function nextShelf() {
+      if (!state.currentBin) {
+        log('No active shelf. Scan a BIN to start.');
+        return;
+      }
+      log(`Moving off BIN ${state.currentBin}. Scan next BIN.`);
+      state.currentBin = null;
+      state.activeRowIndex = null;
+      state.mode = 'scan-bin';
+      el.activeTarget.textContent = 'No active lot selected.';
+      updateModeUI();
+      renderTable();
+      el.scanInput.focus();
+    }
+
+    function completeCount() {
+      if (!state.rows.length) {
+        log('No sheet loaded.');
+        return;
+      }
+      const csv = buildCsv();
+      downloadFile('cycle_count_report.csv', csv, 'text/csv;charset=utf-8;');
+      buildPdf();
+      log('Complete: downloaded CSV and PDF reports.');
+    }
+
+    function resetSession() {
+      state.rows = [];
+      state.currentBin = null;
+      state.activeRowIndex = null;
+      state.mode = 'scan-bin';
+      el.sheetFile.value = '';
+      el.scanInput.value = '';
+      el.quantityInput.value = '';
+      el.scanLog.innerHTML = '';
+      el.activeTarget.textContent = 'No active lot selected.';
+      renderTable();
+      updateModeUI();
+      log('Session reset.');
+    }
+
+    el.loadSheetBtn.addEventListener('click', loadSheet);
+    el.submitScanBtn.addEventListener('click', submitScan);
+    el.scanInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter') submitScan();
+    });
+    el.quantityInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter') saveQuantity();
+    });
+    el.saveQtyBtn.addEventListener('click', saveQuantity);
+    el.nextShelfBtn.addEventListener('click', nextShelf);
+    el.completeBtn.addEventListener('click', completeCount);
+    el.resetBtn.addEventListener('click', resetSession);
+
+    updateModeUI();
+    renderTable();
+    log('Ready. Load inventory sheet to begin.');
+    el.scanInput.focus();
+  </script>
+</body>
+</html>
